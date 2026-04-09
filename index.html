@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>My Baby OJT Time Tracker 🎀</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #fdf0f5;
@@ -37,13 +38,11 @@
   }
   .container { max-width:520px; margin:0 auto; padding:20px 14px 100px; position:relative; z-index:1; }
 
-  /* Header */
   header { text-align:center; margin-bottom:22px; padding-top:env(safe-area-inset-top,0px); }
   .brand-title { font-family:'Playfair Display',serif; font-size:clamp(24px,7vw,36px); font-weight:900; font-style:italic; color:var(--accent2); line-height:1.1; }
   .brand-title span { color:var(--lilac-deep); font-style:normal; }
   .brand-sub { font-size:10px; color:var(--muted); letter-spacing:2.5px; text-transform:uppercase; margin-top:6px; }
 
-  /* Progress card */
   .progress-card {
     background:linear-gradient(135deg,#c94080 0%,#a56cc1 55%,#e0579a 100%);
     border-radius:24px; padding:22px 20px 20px; margin-bottom:16px;
@@ -62,7 +61,6 @@
   .stat-val { font-family:'Playfair Display',serif; font-size:15px; font-weight:700; color:#fff; line-height:1; margin-bottom:4px; }
   .stat-lbl { font-size:8px; color:rgba(255,255,255,0.7); text-transform:uppercase; letter-spacing:1px; }
 
-  /* Cards */
   .card { background:var(--card); border:1.5px solid var(--border); border-radius:20px; margin-bottom:14px; overflow:hidden; }
   .card-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1.5px solid var(--border); }
   .card-title { font-family:'Playfair Display',serif; font-size:15px; font-weight:700; color:var(--accent2); }
@@ -70,7 +68,6 @@
   .section+.section { border-top:1.5px solid var(--border); }
   .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
-  /* Fields */
   .field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
   .field:last-of-type { margin-bottom:0; }
   .field label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; font-weight:600; }
@@ -87,29 +84,36 @@
     background-repeat:no-repeat; background-position:right 14px center; padding-right:36px;
   }
   .field select option { background:#fff; color:var(--text); }
-
   .field-hint { font-size:10px; color:var(--muted); }
   .parsed-badge { font-size:11px; border-radius:8px; padding:3px 9px; min-height:20px; display:inline-block; }
   .parsed-badge.ok  { background:rgba(92,170,128,0.12); color:var(--success); }
   .parsed-badge.err { background:rgba(224,85,117,0.1);  color:var(--danger);  }
   .parsed-badge:empty { display:none; }
 
-  /* Buttons */
   .btn { font-family:'DM Sans',sans-serif; font-size:15px; font-weight:600; border:none; border-radius:14px; padding:14px 22px; cursor:pointer; transition:all 0.2s; min-height:48px; display:flex; align-items:center; justify-content:center; gap:6px; }
   .btn-primary { background:linear-gradient(135deg,var(--accent),var(--lilac-deep)); color:#fff; box-shadow:0 6px 20px rgba(224,87,154,0.35); width:100%; margin-top:6px; }
   .btn-primary:active { transform:scale(0.97); }
   .btn-ghost { background:var(--soft-pink); border:1.5px solid var(--border); color:var(--muted); font-size:12px; padding:8px 14px; min-height:36px; }
 
-  /* Holiday */
+  /* Excel export button */
+  .btn-excel {
+    background:linear-gradient(135deg,#1d6f42,#2e9e5e);
+    color:#fff; font-size:13px; font-weight:600;
+    border:none; border-radius:12px; padding:10px 16px;
+    cursor:pointer; display:flex; align-items:center; gap:6px;
+    min-height:40px; transition:all 0.2s;
+    box-shadow:0 4px 14px rgba(29,111,66,0.3);
+  }
+  .btn-excel:active { transform:scale(0.97); }
+  .btn-excel:disabled { opacity:0.45; cursor:not-allowed; }
+
   .holiday-notice { display:none; align-items:center; gap:10px; background:rgba(184,121,14,0.08); border:1.5px solid rgba(184,121,14,0.25); border-radius:12px; padding:11px 14px; font-size:12px; color:#7a5200; margin:0 16px 12px; }
   .holiday-notice.show { display:flex; }
 
-  /* Tags */
   .tag { display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px; font-size:10px; font-weight:600; white-space:nowrap; }
   .tag-double  { background:rgba(184,121,14,0.1);  border:1px solid rgba(184,121,14,0.3);  color:var(--gold);  }
   .tag-regular { background:var(--soft-pink); border:1px solid var(--border); color:var(--muted); }
 
-  /* Table */
   .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   table { width:100%; border-collapse:collapse; }
   thead tr { background:var(--soft-pink); }
@@ -124,20 +128,26 @@
   .del-btn { background:none; border:none; cursor:pointer; color:var(--border); font-size:18px; padding:4px 8px; border-radius:8px; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center; }
   .del-btn:active { background:rgba(224,87,154,0.1); color:var(--danger); }
 
+  /* Total row */
+  .total-row { background:var(--soft-pink); border-top:2px solid var(--border) !important; }
+  .total-row td { font-weight:700; font-size:13px; color:var(--accent2); padding:13px 12px; }
+  .total-row .total-label { font-family:'Playfair Display',serif; font-style:italic; }
+
   .empty-state { padding:44px 20px; text-align:center; }
   .empty-icon  { font-size:40px; margin-bottom:10px; }
   .empty-text  { font-size:13px; color:var(--muted); line-height:1.6; }
 
-  /* Save tip */
   .save-tip { background:linear-gradient(135deg,rgba(212,168,232,0.22),rgba(247,168,204,0.18)); border:1.5px solid var(--lilac); border-radius:16px; padding:13px 15px; margin-bottom:14px; display:flex; gap:10px; font-size:12px; line-height:1.6; color:var(--lilac-deep); }
   .save-tip strong { display:block; font-weight:600; margin-bottom:2px; color:var(--accent2); }
 
-  /* Toast */
   .toast { position:fixed; bottom:calc(20px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%) translateY(16px); background:var(--card); border:1.5px solid var(--border); border-radius:16px; padding:12px 18px; font-size:13px; color:var(--text); box-shadow:0 8px 32px rgba(201,64,128,0.2); z-index:999; opacity:0; transition:all 0.3s; display:flex; align-items:center; gap:9px; max-width:calc(100vw - 28px); pointer-events:none; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .toast-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 
   .divider { text-align:center; color:var(--border); margin:4px 0 14px; letter-spacing:6px; font-size:15px; }
+
+  /* log card header actions */
+  .card-header-actions { display:flex; gap:8px; align-items:center; }
 
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
   .shake { animation:shake 0.3s; }
@@ -208,14 +218,12 @@
     <div class="card-header"><div class="card-title">🌸 Log OJT Day</div></div>
     <div class="holiday-notice" id="holidayNotice">🎉 <span id="holidayNoticeName"></span> — Choose how to count these hours.</div>
     <div class="section">
-
       <div class="field">
         <label>Date</label>
         <input type="text" id="inputDate" placeholder="Apr 9  or  4/9  or  April 9 2025" inputmode="text" autocomplete="off" autocorrect="off" spellcheck="false" oninput="liveParseDate();" onblur="liveParseDate();">
         <div class="field-hint">Type any format — Apr 9 · 4/9/2025 · April 9 2025 · 9 April</div>
         <span class="parsed-badge" id="dateBadge"></span>
       </div>
-
       <div class="row-2">
         <div class="field">
           <label>Time In</label>
@@ -230,12 +238,10 @@
           <span class="parsed-badge" id="timeoutBadge"></span>
         </div>
       </div>
-
       <div class="field" style="margin-top:2px;">
         <label>Holiday Rate</label>
         <select id="inputHolidayType"><option value="none">Regular Day</option></select>
       </div>
-
       <button class="btn btn-primary" onclick="addEntry()">✨ Add to Log</button>
     </div>
   </div>
@@ -244,11 +250,16 @@
   <div class="card">
     <div class="card-header">
       <div class="card-title">📋 OJT Log</div>
-      <button class="btn btn-ghost" onclick="clearAll()">Clear All</button>
+      <div class="card-header-actions">
+        <button class="btn-excel" id="exportBtn" onclick="exportToExcel()" title="Export all logs to Excel">
+          📊 Export Excel
+        </button>
+        <button class="btn btn-ghost" onclick="clearAll()">Clear All</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>In / Out</th><th>Type</th><th>Credited</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>In / Out</th><th>Type</th><th>Raw</th><th>Credited</th><th></th></tr></thead>
         <tbody id="logBody"></tbody>
       </table>
       <div class="empty-state" id="emptyState">
@@ -368,12 +379,9 @@ function saveSettings() {
   localStorage.setItem('ojt_girly_settings', JSON.stringify(settings));
 }
 
-// ── Smart date parser ──────────────────────────────────────────────────
 function parseFlexDate(raw) {
   if (!raw || !raw.trim()) return null;
   const s = raw.trim().replace(/\s+/g, ' ');
-
-  // pure numeric: M/D or M/D/Y or M-D or M-D-Y
   const numRe = s.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
   if (numRe) {
     const m = parseInt(numRe[1]) - 1;
@@ -382,7 +390,6 @@ function parseFlexDate(raw) {
     if (m>=0 && m<=11 && d>=1 && d<=31) return buildDate(y, m, d);
     return null;
   }
-
   const tokens = s.split(/[\s,\/\-]+/).filter(Boolean);
   let day=null, mon=null, year=new Date().getFullYear();
   for (const tok of tokens) {
@@ -405,7 +412,6 @@ function buildDate(y, m, d) {
   return y + '-' + String(m+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
 }
 
-// ── Smart time parser ──────────────────────────────────────────────────
 function parseFlexTime(raw) {
   if (!raw || !raw.trim()) return null;
   const s = raw.trim().toLowerCase().replace(/\s+/g,'');
@@ -434,7 +440,6 @@ function minsToDisplay(m) {
   return (h%12||12) + (min>0 ? ':'+String(min).padStart(2,'0') : '') + ' ' + (h>=12?'PM':'AM');
 }
 
-// ── Live badges ────────────────────────────────────────────────────────
 function liveParseDate() {
   const raw = document.getElementById('inputDate').value;
   const badge = document.getElementById('dateBadge');
@@ -493,15 +498,14 @@ function updateHolidayDropdown() {
   }
 }
 
-// ── Add entry ──────────────────────────────────────────────────────────
 function addEntry() {
   liveParseDate();
   liveParseTime('inputTimeIn','timeinBadge');
   liveParseTime('inputTimeOut','timeoutBadge');
 
-  if (!parsedDateStr)      { shake('inputDate');    showToast("Fix the date first 🗓️", 'err');          return; }
-  if (parsedTimeInM===null){ shake('inputTimeIn');  showToast("Fix Time In — e.g. 8am 🌸", 'err');      return; }
-  if (parsedTimeOutM===null){ shake('inputTimeOut'); showToast("Fix Time Out — e.g. 5pm 🌸", 'err');    return; }
+  if (!parsedDateStr)       { shake('inputDate');    showToast("Fix the date first 🗓️", 'err');       return; }
+  if (parsedTimeInM===null) { shake('inputTimeIn');  showToast("Fix Time In — e.g. 8am 🌸", 'err');   return; }
+  if (parsedTimeOutM===null){ shake('inputTimeOut'); showToast("Fix Time Out — e.g. 5pm 🌸", 'err'); return; }
 
   const rawMin = parsedTimeOutM - parsedTimeInM;
   if (rawMin <= 0) { shake('inputTimeOut'); showToast("Time Out must be after Time In 💕", 'err'); return; }
@@ -536,7 +540,6 @@ function clearAll() {
   entries=[]; saveData(); renderAll(); showToast('All cleared 🌸','err');
 }
 
-// ── Render ─────────────────────────────────────────────────────────────
 function renderAll() { renderTable(); recalc(); }
 
 function renderTable() {
@@ -544,6 +547,10 @@ function renderTable() {
   const empty = document.getElementById('emptyState');
   if (!entries.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
+
+  const totalRaw      = entries.reduce((s,e)=>s+e.rawMin,0);
+  const totalCredited = entries.reduce((s,e)=>s+e.creditedMin,0);
+
   tbody.innerHTML = entries.map(e => {
     const day = DAYS_SHORT[new Date(e.date+'T12:00:00').getDay()];
     const dt  = new Date(e.date+'T12:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric'});
@@ -554,10 +561,17 @@ function renderTable() {
       <td class="td-date">${dt}<br><span style="font-size:10px;color:var(--muted);font-weight:400">${day}</span></td>
       <td style="font-size:11px;color:var(--muted)">${minsToDisplay(e.timeInM)}<br>${minsToDisplay(e.timeOutM)}</td>
       <td>${tag}</td>
+      <td style="font-size:12px;color:var(--muted)">${fmtMin(e.rawMin)}</td>
       <td class="td-hrs ${e.isDouble?'holiday':'regular'}">${fmtMin(e.creditedMin)}</td>
       <td><button class="del-btn" onclick="deleteEntry(${e.id})" title="Remove">✕</button></td>
     </tr>`;
-  }).join('');
+  }).join('') +
+  `<tr class="total-row">
+    <td class="total-label" colspan="3">✨ TOTAL (${entries.length} day${entries.length!==1?'s':''})</td>
+    <td style="color:var(--muted)">${fmtMin(totalRaw)}</td>
+    <td style="color:var(--accent2)">${fmtMin(totalCredited)}</td>
+    <td></td>
+  </tr>`;
 }
 
 function recalc() {
@@ -575,6 +589,112 @@ function recalc() {
   document.getElementById('statLeft').textContent  = fmtMinShort(remaining);
   document.getElementById('statBonus').textContent = bonusMin>0 ? '+'+fmtMinShort(bonusMin) : '+0';
   document.getElementById('statDays').textContent  = entries.length;
+
+  // disable export if no entries
+  document.getElementById('exportBtn').disabled = entries.length === 0;
+}
+
+// ── Excel Export ───────────────────────────────────────────────────────
+function exportToExcel() {
+  if (!entries.length) { showToast("No entries to export yet 🌸", 'err'); return; }
+
+  const name    = settings.studentName  || 'OJT Student';
+  const company = settings.companyName  || '—';
+  const reqHrs  = settings.requiredHours || 500;
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Daily Log ──────────────────────────────────────────────
+  const sorted = [...entries].sort((a,b) => a.date.localeCompare(b.date));
+  const totalRaw      = sorted.reduce((s,e)=>s+e.rawMin,0);
+  const totalCredited = sorted.reduce((s,e)=>s+e.creditedMin,0);
+  const bonusMin      = totalCredited - totalRaw;
+  const pct           = Math.min(100, Math.round((totalCredited/(reqHrs*60))*100));
+  const remaining     = Math.max(0, (reqHrs*60) - totalCredited);
+
+  const logRows = [
+    ['OJT Daily Time Log'],
+    ['Student:', name, '', 'Company:', company],
+    ['Required Hours:', reqHrs + ' hours', '', 'Exported:', new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})],
+    [],
+    ['#', 'Date', 'Day', 'Time In', 'Time Out', 'Raw Hours (decimal)', 'Raw Hours (h m)', 'Type', 'Holiday / Note', 'Credited Hours (decimal)', 'Credited Hours (h m)'],
+  ];
+
+  sorted.forEach((e, i) => {
+    const dt      = new Date(e.date+'T12:00:00');
+    const dayName = DAYS_LONG[dt.getDay()];
+    const dateStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});
+    const rawDec  = +(e.rawMin / 60).toFixed(4);
+    const credDec = +(e.creditedMin / 60).toFixed(4);
+    logRows.push([
+      i+1,
+      dateStr,
+      dayName,
+      minsToDisplay(e.timeInM),
+      minsToDisplay(e.timeOutM),
+      rawDec,
+      fmtMin(e.rawMin),
+      e.isDouble ? 'Holiday ×2' : 'Regular',
+      e.holidayName || '—',
+      credDec,
+      fmtMin(e.creditedMin),
+    ]);
+  });
+
+  logRows.push([]);
+  logRows.push(['TOTAL', '', '', '', '',
+    +(totalRaw/60).toFixed(4), fmtMin(totalRaw),
+    '', '',
+    +(totalCredited/60).toFixed(4), fmtMin(totalCredited)
+  ]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(logRows);
+
+  // column widths
+  ws1['!cols'] = [
+    {wch:4},{wch:18},{wch:12},{wch:10},{wch:10},
+    {wch:20},{wch:16},{wch:14},{wch:22},{wch:22},{wch:18}
+  ];
+
+  // merge title cell
+  ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:10} }];
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'Daily Log');
+
+  // ── Sheet 2: Summary ────────────────────────────────────────────────
+  const summaryRows = [
+    ['OJT Hours Summary'],
+    [],
+    ['Student Name',      name],
+    ['Company',           company],
+    ['Required Hours',    reqHrs + ' hours'],
+    [],
+    ['HOURS BREAKDOWN',   'Decimal', 'Hours & Minutes'],
+    ['Total Raw Hours',   +(totalRaw/60).toFixed(4),      fmtMin(totalRaw)],
+    ['Holiday Bonus',     +(bonusMin/60).toFixed(4),       bonusMin>0?'+'+fmtMin(bonusMin):fmtMin(bonusMin)],
+    ['Total Credited',    +(totalCredited/60).toFixed(4),  fmtMin(totalCredited)],
+    ['Hours Remaining',   +(remaining/60).toFixed(4),      fmtMin(remaining)],
+    [],
+    ['PROGRESS',          pct + '%'],
+    ['Total OJT Days',    sorted.length],
+    ['Holiday Days (×2)', sorted.filter(e=>e.isDouble).length],
+    ['Regular Days',      sorted.filter(e=>!e.isDouble).length],
+    [],
+    ['Exported on',       new Date().toLocaleDateString('en-PH',{weekday:'long',month:'long',day:'numeric',year:'numeric'})],
+  ];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(summaryRows);
+  ws2['!cols'] = [{wch:22},{wch:16},{wch:20}];
+  ws2['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:2} }];
+
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+
+  // ── File name ───────────────────────────────────────────────────────
+  const safeName = name.replace(/[^a-zA-Z0-9_\- ]/g,'').trim() || 'OJT';
+  const dateTag  = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `${safeName}_OJT_Log_${dateTag}.xlsx`);
+
+  showToast('📊 Excel exported! Check your Downloads 💕', 'ok');
 }
 
 function fmtMin(m)      { return Math.floor(m/60)+'h '+(m%60)+'m'; }
