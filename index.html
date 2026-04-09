@@ -67,6 +67,7 @@
   .section { padding:14px 16px; }
   .section+.section { border-top:1.5px solid var(--border); }
   .row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
 
   .field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
   .field:last-of-type { margin-bottom:0; }
@@ -90,12 +91,20 @@
   .parsed-badge.err { background:rgba(224,85,117,0.1);  color:var(--danger);  }
   .parsed-badge:empty { display:none; }
 
+  /* Break notice banner */
+  .break-notice {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(165,108,193,0.09); border:1.5px solid rgba(165,108,193,0.28);
+    border-radius:12px; padding:10px 14px; font-size:12px; color:#5a2e7a;
+    margin:0 16px 12px;
+  }
+  .break-notice strong { font-weight:600; }
+
   .btn { font-family:'DM Sans',sans-serif; font-size:15px; font-weight:600; border:none; border-radius:14px; padding:14px 22px; cursor:pointer; transition:all 0.2s; min-height:48px; display:flex; align-items:center; justify-content:center; gap:6px; }
   .btn-primary { background:linear-gradient(135deg,var(--accent),var(--lilac-deep)); color:#fff; box-shadow:0 6px 20px rgba(224,87,154,0.35); width:100%; margin-top:6px; }
   .btn-primary:active { transform:scale(0.97); }
   .btn-ghost { background:var(--soft-pink); border:1.5px solid var(--border); color:var(--muted); font-size:12px; padding:8px 14px; min-height:36px; }
 
-  /* Excel export button */
   .btn-excel {
     background:linear-gradient(135deg,#1d6f42,#2e9e5e);
     color:#fff; font-size:13px; font-weight:600;
@@ -128,7 +137,6 @@
   .del-btn { background:none; border:none; cursor:pointer; color:var(--border); font-size:18px; padding:4px 8px; border-radius:8px; min-width:36px; min-height:36px; display:flex; align-items:center; justify-content:center; }
   .del-btn:active { background:rgba(224,87,154,0.1); color:var(--danger); }
 
-  /* Total row */
   .total-row { background:var(--soft-pink); border-top:2px solid var(--border) !important; }
   .total-row td { font-weight:700; font-size:13px; color:var(--accent2); padding:13px 12px; }
   .total-row .total-label { font-family:'Playfair Display',serif; font-style:italic; }
@@ -146,7 +154,6 @@
 
   .divider { text-align:center; color:var(--border); margin:4px 0 14px; letter-spacing:6px; font-size:15px; }
 
-  /* log card header actions */
   .card-header-actions { display:flex; gap:8px; align-items:center; }
 
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
@@ -206,9 +213,20 @@
           <input type="number" id="requiredHours" value="500" min="1" max="5000" inputmode="numeric" oninput="saveSettings();recalc();">
         </div>
       </div>
-      <div class="field">
-        <label>Company</label>
-        <input type="text" id="companyName" placeholder="e.g. Acme Corp" oninput="saveSettings();">
+      <div class="row-2">
+        <div class="field" style="margin-bottom:0">
+          <label>Company</label>
+          <input type="text" id="companyName" placeholder="e.g. Acme Corp" oninput="saveSettings();">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Break Deduction ☕</label>
+          <select id="breakMins" onchange="saveSettings();recalc();">
+            <option value="0">No break deduction</option>
+            <option value="30">30 min break</option>
+            <option value="60" selected>1 hour break</option>
+            <option value="90">1.5 hour break</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -217,6 +235,9 @@
   <div class="card">
     <div class="card-header"><div class="card-title">🌸 Log OJT Day</div></div>
     <div class="holiday-notice" id="holidayNotice">🎉 <span id="holidayNoticeName"></span> — Choose how to count these hours.</div>
+    <div class="break-notice" id="breakNotice" style="display:none">
+      ☕ <span id="breakNoticeText"></span>
+    </div>
     <div class="section">
       <div class="field">
         <label>Date</label>
@@ -259,7 +280,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>In / Out</th><th>Type</th><th>Raw</th><th>Credited</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>In / Out</th><th>Type</th><th>Raw</th><th>–Break</th><th>Credited</th><th></th></tr></thead>
         <tbody id="logBody"></tbody>
       </table>
       <div class="empty-state" id="emptyState">
@@ -344,7 +365,7 @@ const DAYS_LONG  = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday",
 const DAYS_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 let entries = [];
-let settings = {requiredHours:500,studentName:'',companyName:''};
+let settings = {requiredHours:500,studentName:'',companyName:'',breakMins:60};
 let parsedDateStr = null;
 let parsedTimeInM = null;
 let parsedTimeOutM = null;
@@ -364,10 +385,11 @@ function loadData() {
     if (e) entries = JSON.parse(e);
     const s = localStorage.getItem('ojt_girly_settings');
     if (s) {
-      settings = JSON.parse(s);
+      settings = Object.assign({requiredHours:500,studentName:'',companyName:'',breakMins:60}, JSON.parse(s));
       document.getElementById('requiredHours').value = settings.requiredHours || 500;
       document.getElementById('studentName').value   = settings.studentName   || '';
       document.getElementById('companyName').value   = settings.companyName   || '';
+      document.getElementById('breakMins').value     = settings.breakMins !== undefined ? settings.breakMins : 60;
     }
   } catch(e) {}
 }
@@ -376,7 +398,25 @@ function saveSettings() {
   settings.requiredHours = parseInt(document.getElementById('requiredHours').value) || 500;
   settings.studentName   = document.getElementById('studentName').value;
   settings.companyName   = document.getElementById('companyName').value;
+  settings.breakMins     = parseInt(document.getElementById('breakMins').value) || 0;
   localStorage.setItem('ojt_girly_settings', JSON.stringify(settings));
+  updateBreakNotice();
+}
+
+function getBreakMins() {
+  return parseInt(document.getElementById('breakMins').value) || 0;
+}
+
+function updateBreakNotice() {
+  const bm = getBreakMins();
+  const notice = document.getElementById('breakNotice');
+  const text   = document.getElementById('breakNoticeText');
+  if (bm > 0) {
+    notice.style.display = 'flex';
+    text.textContent = bm + ' min break will be deducted from each day\'s raw hours before crediting.';
+  } else {
+    notice.style.display = 'none';
+  }
 }
 
 function parseFlexDate(raw) {
@@ -507,8 +547,11 @@ function addEntry() {
   if (parsedTimeInM===null) { shake('inputTimeIn');  showToast("Fix Time In — e.g. 8am 🌸", 'err');   return; }
   if (parsedTimeOutM===null){ shake('inputTimeOut'); showToast("Fix Time Out — e.g. 5pm 🌸", 'err'); return; }
 
-  const rawMin = parsedTimeOutM - parsedTimeInM;
-  if (rawMin <= 0) { shake('inputTimeOut'); showToast("Time Out must be after Time In 💕", 'err'); return; }
+  const spanMin = parsedTimeOutM - parsedTimeInM;
+  if (spanMin <= 0) { shake('inputTimeOut'); showToast("Time Out must be after Time In 💕", 'err'); return; }
+
+  const bm = getBreakMins();
+  const rawMin = Math.max(0, spanMin - bm); // deduct break
 
   if (entries.find(e => e.date === parsedDateStr)) {
     const friendly = new Date(parsedDateStr+'T12:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});
@@ -520,12 +563,30 @@ function addEntry() {
   const isDouble = holType === 'double';
   const creditedMin = isDouble ? rawMin * 2 : rawMin;
 
-  entries.unshift({ id:Date.now(), date:parsedDateStr, timeInM:parsedTimeInM, timeOutM:parsedTimeOutM, rawMin, holidayName:(isDouble&&hol)?hol.name:null, isDouble, creditedMin });
+  entries.unshift({
+    id: Date.now(),
+    date: parsedDateStr,
+    timeInM: parsedTimeInM,
+    timeOutM: parsedTimeOutM,
+    spanMin,          // raw clock span
+    breakMin: bm,     // break deducted
+    rawMin,           // spanMin - break
+    holidayName: (isDouble && hol) ? hol.name : null,
+    isDouble,
+    creditedMin
+  });
   saveData(); renderAll();
 
-  const msg = isDouble
-    ? '🎉 Holiday! Credited ' + fmtMin(creditedMin) + ' (' + fmtMin(rawMin) + ' × 2)'
-    : '🌸 Added ' + fmtMin(creditedMin);
+  let msg = '';
+  if (bm > 0 && isDouble) {
+    msg = '🎉 Holiday! ' + fmtMin(spanMin) + ' − ' + bm + 'min break = ' + fmtMin(rawMin) + ' × 2 = ' + fmtMin(creditedMin);
+  } else if (bm > 0) {
+    msg = '🌸 ' + fmtMin(spanMin) + ' − ' + bm + 'min break = ' + fmtMin(rawMin) + ' credited';
+  } else if (isDouble) {
+    msg = '🎉 Holiday! Credited ' + fmtMin(creditedMin) + ' (' + fmtMin(rawMin) + ' × 2)';
+  } else {
+    msg = '🌸 Added ' + fmtMin(creditedMin);
+  }
   showToast(msg, 'ok');
 
   ['inputTimeIn','inputTimeOut'].forEach(id => document.getElementById(id).value='');
@@ -540,7 +601,7 @@ function clearAll() {
   entries=[]; saveData(); renderAll(); showToast('All cleared 🌸','err');
 }
 
-function renderAll() { renderTable(); recalc(); }
+function renderAll() { renderTable(); recalc(); updateBreakNotice(); }
 
 function renderTable() {
   const tbody = document.getElementById('logBody');
@@ -548,6 +609,8 @@ function renderTable() {
   if (!entries.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
 
+  const totalSpan     = entries.reduce((s,e)=>s+(e.spanMin||e.rawMin),0);
+  const totalBreak    = entries.reduce((s,e)=>s+(e.breakMin||0),0);
   const totalRaw      = entries.reduce((s,e)=>s+e.rawMin,0);
   const totalCredited = entries.reduce((s,e)=>s+e.creditedMin,0);
 
@@ -557,18 +620,25 @@ function renderTable() {
     const tag = e.isDouble
       ? '<span class="tag tag-double">×2 🎉</span>'
       : '<span class="tag tag-regular">Regular</span>';
+    const spanMin = e.spanMin || e.rawMin;
+    const bkMin   = e.breakMin || 0;
+    const breakCell = bkMin > 0
+      ? `<span style="font-size:11px;color:var(--muted)">−${bkMin}m</span>`
+      : `<span style="font-size:11px;color:var(--border)">—</span>`;
     return `<tr>
       <td class="td-date">${dt}<br><span style="font-size:10px;color:var(--muted);font-weight:400">${day}</span></td>
       <td style="font-size:11px;color:var(--muted)">${minsToDisplay(e.timeInM)}<br>${minsToDisplay(e.timeOutM)}</td>
       <td>${tag}</td>
-      <td style="font-size:12px;color:var(--muted)">${fmtMin(e.rawMin)}</td>
+      <td style="font-size:12px;color:var(--muted)">${fmtMin(spanMin)}</td>
+      <td>${breakCell}</td>
       <td class="td-hrs ${e.isDouble?'holiday':'regular'}">${fmtMin(e.creditedMin)}</td>
       <td><button class="del-btn" onclick="deleteEntry(${e.id})" title="Remove">✕</button></td>
     </tr>`;
   }).join('') +
   `<tr class="total-row">
     <td class="total-label" colspan="3">✨ TOTAL (${entries.length} day${entries.length!==1?'s':''})</td>
-    <td style="color:var(--muted)">${fmtMin(totalRaw)}</td>
+    <td style="color:var(--muted)">${fmtMin(totalSpan)}</td>
+    <td style="color:var(--muted);font-size:12px">${totalBreak>0?'−'+fmtMinShort(totalBreak):''}</td>
     <td style="color:var(--accent2)">${fmtMin(totalCredited)}</td>
     <td></td>
   </tr>`;
@@ -578,8 +648,8 @@ function recalc() {
   const reqHours = parseInt(document.getElementById('requiredHours').value) || 500;
   const reqMin   = reqHours * 60;
   const totalCredited = entries.reduce((s,e)=>s+e.creditedMin,0);
-  const totalRaw      = entries.reduce((s,e)=>s+e.rawMin,0);
-  const bonusMin      = totalCredited - totalRaw;
+  const totalSpan     = entries.reduce((s,e)=>s+(e.spanMin||e.rawMin),0);
+  const bonusMin      = entries.filter(e=>e.isDouble).reduce((s,e)=>s+e.rawMin,0); // extra from holidays
   const pct           = Math.min(100, Math.round((totalCredited/reqMin)*100));
   const remaining     = Math.max(0, reqMin - totalCredited);
   document.getElementById('progressPct').textContent = pct+'%';
@@ -589,8 +659,6 @@ function recalc() {
   document.getElementById('statLeft').textContent  = fmtMinShort(remaining);
   document.getElementById('statBonus').textContent = bonusMin>0 ? '+'+fmtMinShort(bonusMin) : '+0';
   document.getElementById('statDays').textContent  = entries.length;
-
-  // disable export if no entries
   document.getElementById('exportBtn').disabled = entries.length === 0;
 }
 
@@ -601,30 +669,34 @@ function exportToExcel() {
   const name    = settings.studentName  || 'OJT Student';
   const company = settings.companyName  || '—';
   const reqHrs  = settings.requiredHours || 500;
+  const bkMins  = settings.breakMins || 0;
 
   const wb = XLSX.utils.book_new();
 
-  // ── Sheet 1: Daily Log ──────────────────────────────────────────────
   const sorted = [...entries].sort((a,b) => a.date.localeCompare(b.date));
+  const totalSpan     = sorted.reduce((s,e)=>s+(e.spanMin||e.rawMin),0);
+  const totalBreak    = sorted.reduce((s,e)=>s+(e.breakMin||0),0);
   const totalRaw      = sorted.reduce((s,e)=>s+e.rawMin,0);
   const totalCredited = sorted.reduce((s,e)=>s+e.creditedMin,0);
-  const bonusMin      = totalCredited - totalRaw;
+  const bonusMin      = sorted.filter(e=>e.isDouble).reduce((s,e)=>s+e.rawMin,0);
   const pct           = Math.min(100, Math.round((totalCredited/(reqHrs*60))*100));
   const remaining     = Math.max(0, (reqHrs*60) - totalCredited);
 
   const logRows = [
     ['OJT Daily Time Log'],
     ['Student:', name, '', 'Company:', company],
-    ['Required Hours:', reqHrs + ' hours', '', 'Exported:', new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})],
+    ['Required Hours:', reqHrs + ' hours', '', 'Break Deduction:', bkMins > 0 ? bkMins + ' min/day' : 'None'],
+    ['Exported:', new Date().toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'})],
     [],
-    ['#', 'Date', 'Day', 'Time In', 'Time Out', 'Raw Hours (decimal)', 'Raw Hours (h m)', 'Type', 'Holiday / Note', 'Credited Hours (decimal)', 'Credited Hours (h m)'],
+    ['#', 'Date', 'Day', 'Time In', 'Time Out', 'Span (h m)', 'Break Deducted', 'Net Raw (h m)', 'Type', 'Holiday / Note', 'Credited (decimal)', 'Credited (h m)'],
   ];
 
   sorted.forEach((e, i) => {
     const dt      = new Date(e.date+'T12:00:00');
     const dayName = DAYS_LONG[dt.getDay()];
     const dateStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});
-    const rawDec  = +(e.rawMin / 60).toFixed(4);
+    const spanMin = e.spanMin || e.rawMin;
+    const bkMin   = e.breakMin || 0;
     const credDec = +(e.creditedMin / 60).toFixed(4);
     logRows.push([
       i+1,
@@ -632,7 +704,8 @@ function exportToExcel() {
       dayName,
       minsToDisplay(e.timeInM),
       minsToDisplay(e.timeOutM),
-      rawDec,
+      fmtMin(spanMin),
+      bkMin > 0 ? '−' + bkMin + 'm' : '—',
       fmtMin(e.rawMin),
       e.isDouble ? 'Holiday ×2' : 'Regular',
       e.holidayName || '—',
@@ -643,37 +716,37 @@ function exportToExcel() {
 
   logRows.push([]);
   logRows.push(['TOTAL', '', '', '', '',
-    +(totalRaw/60).toFixed(4), fmtMin(totalRaw),
+    fmtMin(totalSpan),
+    totalBreak > 0 ? '−' + fmtMinShort(totalBreak) : '—',
+    fmtMin(totalRaw),
     '', '',
-    +(totalCredited/60).toFixed(4), fmtMin(totalCredited)
+    +(totalCredited/60).toFixed(4),
+    fmtMin(totalCredited)
   ]);
 
   const ws1 = XLSX.utils.aoa_to_sheet(logRows);
-
-  // column widths
   ws1['!cols'] = [
     {wch:4},{wch:18},{wch:12},{wch:10},{wch:10},
-    {wch:20},{wch:16},{wch:14},{wch:22},{wch:22},{wch:18}
+    {wch:12},{wch:16},{wch:14},{wch:14},{wch:22},{wch:20},{wch:16}
   ];
-
-  // merge title cell
-  ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:10} }];
-
+  ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:11} }];
   XLSX.utils.book_append_sheet(wb, ws1, 'Daily Log');
 
-  // ── Sheet 2: Summary ────────────────────────────────────────────────
   const summaryRows = [
     ['OJT Hours Summary'],
     [],
     ['Student Name',      name],
     ['Company',           company],
     ['Required Hours',    reqHrs + ' hours'],
+    ['Break per Day',     bkMins > 0 ? bkMins + ' minutes' : 'None'],
     [],
     ['HOURS BREAKDOWN',   'Decimal', 'Hours & Minutes'],
-    ['Total Raw Hours',   +(totalRaw/60).toFixed(4),      fmtMin(totalRaw)],
-    ['Holiday Bonus',     +(bonusMin/60).toFixed(4),       bonusMin>0?'+'+fmtMin(bonusMin):fmtMin(bonusMin)],
-    ['Total Credited',    +(totalCredited/60).toFixed(4),  fmtMin(totalCredited)],
-    ['Hours Remaining',   +(remaining/60).toFixed(4),      fmtMin(remaining)],
+    ['Total Clock Hours', +(totalSpan/60).toFixed(4),     fmtMin(totalSpan)],
+    ['Total Break Time',  +(totalBreak/60).toFixed(4),    totalBreak > 0 ? '−'+fmtMin(totalBreak) : '—'],
+    ['Net Raw Hours',     +(totalRaw/60).toFixed(4),      fmtMin(totalRaw)],
+    ['Holiday Bonus',     +(bonusMin/60).toFixed(4),      bonusMin>0?'+'+fmtMin(bonusMin):fmtMin(bonusMin)],
+    ['Total Credited',    +(totalCredited/60).toFixed(4), fmtMin(totalCredited)],
+    ['Hours Remaining',   +(remaining/60).toFixed(4),     fmtMin(remaining)],
     [],
     ['PROGRESS',          pct + '%'],
     ['Total OJT Days',    sorted.length],
@@ -686,14 +759,11 @@ function exportToExcel() {
   const ws2 = XLSX.utils.aoa_to_sheet(summaryRows);
   ws2['!cols'] = [{wch:22},{wch:16},{wch:20}];
   ws2['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:2} }];
-
   XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
 
-  // ── File name ───────────────────────────────────────────────────────
   const safeName = name.replace(/[^a-zA-Z0-9_\- ]/g,'').trim() || 'OJT';
   const dateTag  = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `${safeName}_OJT_Log_${dateTag}.xlsx`);
-
   showToast('📊 Excel exported! Check your Downloads 💕', 'ok');
 }
 
